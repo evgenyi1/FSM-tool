@@ -17,4 +17,5 @@ Usage :
 
 
 fsm_tool_framework.c/h - parts of user's code that runs FSM
+
 fsm_tool_simulator - example how to init , start FSM and how to inject messages to FSM
