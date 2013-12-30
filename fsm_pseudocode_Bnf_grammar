@@ -1,0 +1,35 @@
+ <FSMDecl> ::=   'stateMachine {'  <Fsm-name>  <TimerCallback>  <Event-section> <State-section> '}'
+
+<Fsm-name>       ::= <C-Identifier-name> '()'
+<TimerCallback>  ::= 'timerCallback =   <Online-operator>  
+
+<Event-section>  ::=  'events {' <Event-decl> [,<Event-decl>] '}'
+
+   <Event-decl>  ::=  <Event-name> '(' <event-param> [,<event-param>] ')'
+   <event-param> ::= <param-type> <param-name>   
+   <param-type>  ::= <C-Identifier-name> | <C-Identifier-name> *
+   <param-name>  ::=  <C-Identifier-name>
+   <Event-name>  ::=  <C-Identifier-name>
+
+<State-section> ::= <State-decl> [,<State-decl>]
+
+   <State-decl>     ::= 'state' <State-name> '{' [ <State-operator> [<State-operator>]  ] '}'
+   <State-operator> ::= 'default' | 'ef' | 'exf' | 'tm =' string | <Transition-operator> | <Substates-operator>
+   <Substates-operator>  ::= 'substates (' <State-name> [,<State-name>] ')'
+   <State-name>          ::= <C-Identifier-name>
+
+   <Transition-operator> ::= 'transitions{'<Transition-row> [<Transition-row>]  '}'
+   <Transition-row>      ::= '(' <Trigger-operation> <Guard> <Target-state> <Reaction-function> ')' 
+   
+   <Trigger-operation>   ::= <Event-name> | 'TIMER_EVENT' |'NULL_EVENT'|'AUX_TIMER_EVENT'
+   <Target-state>        ::= <State-name> | 'IN_STATE'
+   <Guard>               ::= 'NULL' |<Online-operator>
+   <Online-operator>     ::= '$' < c-operator > '$' 
+
+   <Reaction-function>   ::= 'NULL' |<Online-Operators>  |<Function>
+   <Online-Operators>     :=  '$'< c-operator >';' [< c-operator > ';'] '$'
+   <Function>            ::= <Function-name> '(' [<param-name>] ')'
+   <Function-name>       ::=  <C-Identifier-name>
+
+
+<Comment-line> ::=  '//' 
