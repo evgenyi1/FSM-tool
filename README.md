@@ -4,7 +4,7 @@ FSM-tool
 Tool for FSM development
 
 Usage :
- fsm_generator  fsm_example   <path to "C" fsm file>   <path to "h" fsm file>
+ fsm_generator  fsm_example   {path to .c fsm file}   {path to .h fsm file}
  
  files to be generated(updated) : fsm_example.c fsm_example.h 
  
