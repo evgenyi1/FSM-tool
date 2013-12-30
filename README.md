@@ -14,3 +14,7 @@ Usage :
  3. validates fsm code and reports validation error if need
  4. generates fsm code between placeholder symbols in the .c and .h files of fsm
  5. generates GML file (graphic modeling file which could be presented by Yed tool)
+
+
+fsm_tool_framework.c/h - parts of user's code that runs FSM
+fsm_tool_simulator - example how to init , start FSM and how to inject messages to FSM
