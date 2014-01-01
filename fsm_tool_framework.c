@@ -84,8 +84,7 @@ fsm_init(fsm_base *fsm, fsm_state_base *curr_state_entry, uint8 num_states,
     fsm->tmr_mngr.sched_func = timer_sched;
     fsm->tmr_mngr.unsched_func = timer_unsched;
     fsm_tm_init(&fsm->tmr_mngr);
-    fsm_trace(fsm, "\nFsm Framework called %s for type %d\n", __FUNCTION__,
-              fsm->fsm_type);
+    fsm_trace(fsm, "\nFsm Framework called %s \n", __FUNCTION__);
     fsm_trace(fsm, "FSM passed to %s state\n\n", fsm->curr_state->name);
     return rc;
 }
@@ -212,6 +211,8 @@ fsm_trace(fsm_base *fsm, const char *fmt, ...)
 fsm_consume_results
 fsm_handle_event(fsm_base *fsm, fsm_event_base *ev)
 {
+	fsm_state_base      *target_state = NULL;
+	fsm_consume_results  consume_event_result;
     if (!ev) {
         return FSM_CONSUME_ERROR;
     }
@@ -223,14 +224,13 @@ fsm_handle_event(fsm_base *fsm, fsm_event_base *ev)
     }
     if (fsm->busy_flag) {
         fsm_trace(fsm,
-                  "FSM Framework Error: try to recursive entry in fsm %d\n",
-                  fsm->fsm_type);
+                  "FSM Framework Error: try to recursive entry in \n");
         return FSM_CONSUME_ERROR;
     }
 
     fsm->current_event = ev;
     fsm->busy_flag = 1;
-    fsm->consume_event_result = FSM_CONSUMED;
+    consume_event_result = FSM_CONSUMED;
 
     if (ev->opcode == AUX_TIMER_EVENT) {
         fsm_unschedule_aux_timer(fsm);
@@ -238,44 +238,44 @@ fsm_handle_event(fsm_base *fsm, fsm_event_base *ev)
 
     do {
         fsm->reaction_in_state = 0;
-        if ((fsm->target_state =
+        if ((target_state =
                  fsm_state_handle_event(fsm, fsm->curr_state, ev)) != NULL) {
-            if (fsm->consume_event_result == FSM_CONSUME_ERROR) {
+            if (consume_event_result == FSM_CONSUME_ERROR) {
                 break; /* returns with consume error */
             }
 
-            if (fsm->target_state->type == SIMPLE) {
-                fsm->last_simple_state = fsm->target_state;
+            if (target_state->type == SIMPLE) {
+                fsm->last_simple_state = target_state;
             }
             fsm->prev_state = fsm->curr_state;
-            fsm->curr_state = fsm->target_state;
+            fsm->curr_state = target_state;
         }else {
             if (fsm->curr_state->type == CONDITION) {
                 fsm_trace(fsm,
                           "FSM_framework: Error :event %s is not consumed in condition state %s\n",
                           fsm->current_event->name, fsm->curr_state->name);
-                fsm->consume_event_result = FSM_CONSUME_ERROR;
+                consume_event_result = FSM_CONSUME_ERROR;
             }else {
-                fsm->consume_event_result = FSM_NOT_CONSUMED;
+                consume_event_result = FSM_NOT_CONSUMED;
             }
             fsm_trace(fsm, "Event %s is not consumed in state %s (%d)\n\n",
                       ev->name, fsm->curr_state->name, fsm->curr_state->id);
             break;
         }
-        if (fsm->target_state->type == CONDITION) { /* m_pCurrentEvent = &Null_ev ; // need to preserve this event for pass its parameters to reactions */
+        if (target_state->type == CONDITION) { /* m_pCurrentEvent = &Null_ev ; // need to preserve this event for pass its parameters to reactions */
             fsm_trace(fsm, "Check Condition %s state\n",
                       fsm->curr_state->name);
         }
-    } while ((fsm->target_state->type == CONDITION) &&
-             (fsm->consume_event_result == FSM_CONSUMED));
+    } while ((target_state->type == CONDITION) &&
+             (consume_event_result == FSM_CONSUMED));
 
-    if (fsm->target_state) {
+    if (target_state) {
         fsm_trace(fsm, "FSM passed to %s state\n\n", fsm->curr_state->name);
     }
     fsm->busy_flag = 0;
     fsm->current_event = NULL;
 
-    return fsm->consume_event_result;
+    return consume_event_result;
 }
 
 /*----------------------------------------------------------------------
@@ -353,7 +353,7 @@ fsm_state_handle_event(fsm_base *fsm, fsm_state_base *state,
         }
     }
     if (target_state && (target_state->type != CONDITION)) {
-        fsm->consumed_in_composed = (target_state->default_substate) ? 1 : 0;
+        //fsm->consumed_in_composed = (target_state->default_substate) ? 1 : 0;
 
         /* if arc on composed state(CurrentState == targetState ) and also "reaction in state" - nothing to do .
          * By this we will support arcs on composed states */

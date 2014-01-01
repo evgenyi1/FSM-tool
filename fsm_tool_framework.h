@@ -155,21 +155,20 @@ typedef fsm_state_base* (*fsm_state_dispatch) (void *fsm,
  all user's FSMs include it 
  ################################################## */
 typedef struct fsm_base {
-    unsigned short fsm_type;                  /*  type of FSM */
     fsm_state_base      *curr_state;          /*  points to current state static Class */
     fsm_state_base      *prev_state;          /*  points to the previous state */
     fsm_state_base      *last_simple_state;   /*  points to the last simple state (to get rid of all condition states between 2 real states) */
-    int consumed_in_composed;                 /*  flag risen if last event was consumed in composed state */
     fsm_event_base      *current_event;
-    int reaction_in_state;
-    fsm_consume_results consume_event_result; /*  result of consuming event by FSM */
-    timer_mngr tmr_mngr;                      /*  integrated timer manager */
-    int*                state_timers;         /*  pointer to the array of timers */
-    fsm_user_trace user_trace;
-    unsigned char num_states;                 /*  number states in the state machine */
-    fsm_state_base      *target_state;        /* target State */
-    int busy_flag;                            /* to avoid recursive entry the FSMs */
-    int err;
+    fsm_user_trace      user_trace;
+
+    unsigned char        reaction_in_state:1;
+    unsigned char        busy_flag:2;              /* to avoid recursive entry the FSMs */
+	unsigned char        consumed_in_composed:3; /*  flag risen if last event was consumed in composed state */
+    int                  err;
+	unsigned char        num_states;             /*  number states in the state machine */
+
+	timer_mngr    tmr_mngr;                      /*  integrated timer manager */
+	int*          state_timers;         /*  pointer to the array of timers */
 } fsm_base;
 
 #ifndef WIN32
