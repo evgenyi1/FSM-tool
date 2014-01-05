@@ -35,7 +35,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <termios.h>
-#include "logging.h"
+//#include "logging.h"
 #endif
 #include "fsm_tool_framework.h"
 

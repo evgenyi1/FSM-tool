@@ -29,7 +29,20 @@ Description:
 #define FSM_FRAMEWORK_H
 
 #ifndef WIN32
-#include "ttypes.h"
+#ifndef uint8
+typedef unsigned char uint8;
+#endif
+#ifndef uint16
+typedef unsigned short uint16;
+#endif
+#ifndef uint32
+typedef unsigned int uint32;
+#endif
+#ifndef tbool
+typedef unsigned int tbool;
+#endif
+
+
 #endif
 
 #ifndef UNUSED_PARAM
