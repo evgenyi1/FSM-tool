@@ -43,13 +43,13 @@ lag_fsm ()
 
 events {
 	start_ev           ()
-	port_up_ev        (int lacp_enable ,int* port_id)
+	port_up_ev         (int lacp_enable ,int* port_id)
 	port_down_ev       ()
-	lacp_up_ev          (int* port_id)
-	lacp_down_ev        (int* port_id)
+	lacp_up_ev         (int* port_id)
+	lacp_down_ev       (int* port_id)
 	mismatch_ev        (int* port_id)
-	admin_on_ev         ()
-	admin_off_ev        ()
+	admin_on_ev        ()
+	admin_off_ev       ()
 }
 
 
