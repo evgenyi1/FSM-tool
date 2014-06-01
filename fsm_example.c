@@ -77,7 +77,7 @@ state admin_up {
   { port_up_ev        , NULL    , admin_up ,  on_port_up_composed_state() }
   { lacp_down_ev      , NULL    , admin_up ,  on_lacp_down_composed_state() }
   { lacp_up_ev        , NULL    , admin_up ,  on_lacp_up_composed_state() }
-  { TIMER_EVENT     , NULL     ,  admin_down   , NULL    }
+  { TIMER_EVENT       , NULL    ,  admin_down   , NULL    }
 
   { admin_off_ev      , NULL    , admin_down  ,  on_admin_off() }
  }
@@ -87,10 +87,10 @@ state admin_up {
 // ***********************************
 state lag_down {
  transitions {
-	{ port_up_ev      , $ ev->lacp_enable $    , wait_lag_up    ,  on_port_up_lacp_enable() }
-	{ port_up_ev      , $ else $                 , lag_up        ,  on_port_up_lacp_disable() }
-	{ lacp_up_ev      , NULL                     , lag_up         , on_lacp_up_in_wait_state()  }
-	{ mismatch_ev    , NULL                     , mismatch     ,  on_mismatch() }
+	{ port_up_ev      , $ ev->lacp_enable $      , wait_lag_up    ,  on_port_up_lacp_enable() }
+	{ port_up_ev      , $ else $                 , lag_up         ,  on_port_up_lacp_disable() }
+	{ lacp_up_ev      , NULL                     , lag_up         ,  on_lacp_up_in_wait_state()  }
+	{ mismatch_ev     , NULL                     , mismatch       ,  on_mismatch() }
 
  }
  ef = lagDown
@@ -100,9 +100,9 @@ state lag_down {
 state wait_lag_up {
   tm = IN_PROGRESS_TIMER_MS
   transitions {
-   { mismatch_ev          , NULL            , mismatch  , on_mismatch()          }
-   { lacp_up_ev            , NULL            , lag_up     , on_lacp_up_in_wait_state() }
-   { TIMER_EVENT         , NULL            , lag_down   , on_in_progress_tout()    }
+   { mismatch_ev          , NULL            , mismatch   , on_mismatch()          }
+   { lacp_up_ev           , NULL            , lag_up     , on_lacp_up_in_wait_state() }
+   { TIMER_EVENT          , NULL            , lag_down   , on_in_progress_tout()    }
  }
 }
 
@@ -110,15 +110,15 @@ state wait_lag_up {
 
 state lag_up {
  transitions {
-	{ port_down_ev       , $ fsm->lag == 0 $      , lag_down      ,  on_port_down_last_port()    }
-	{ mismatch_ev       , NULL                         , condit1     ,  on_mismatch()   }
-	{ lacp_down_ev       , $ fsm->lag  $          , lag_down          ,  on_lacp_down_last_port()        }
+	{ port_down_ev       , $ fsm->lag == 0 $      , lag_down       ,  on_port_down_last_port()    }
+	{ mismatch_ev        , NULL                   , condit1        ,  on_mismatch()   }
+	{ lacp_down_ev       , $ fsm->lag  $          , lag_down       ,  on_lacp_down_last_port()        }
  }
 }
 state condit1 {
   transitions {
-       {   NULL_EVENT       , $ fsm->lag == 0 $      , mismatch     ,  on_mismatch()    }
-	   {   NULL_EVENT       , $ else $                   , lag_up         ,  NULL    }
+       {   NULL_EVENT         , $ fsm->lag == 0 $      , mismatch       ,  on_mismatch()    }
+	   {   NULL_EVENT     , $ else $               , lag_up         ,  NULL    }
 	}
 }
 
