@@ -19,10 +19,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <ctype.h>
-#ifndef WIN32
-#include <complib/cl_init.h>
-#include <complib/cl_timer.h>
-#endif
 #include "fsm_example.h"
 
 void FsmTrace(char* buf, int len);
@@ -37,50 +33,12 @@ void FsmTrace(char* buf, int len)
 
 int ConcreteTmUnsched(void ** timer_handler)
 {
-    int err = 0;
-#ifndef WIN32
-    cl_timer_stop(*timer_handler);
-
-    /* Destroy timer */
-	cl_timer_destroy(*timer_handler);
-
-	free(*timer_handler);
-#endif
-    return err;
+    return 0;
 }
 
 int ConcreteTmSched(int timeout, void *data, void ** timer_handler)
 {
-    int err = 0;
-#ifndef WIN32
-	cl_status_t cl_err;
-    cl_timer_t *concrete_timer_handler = NULL;
-
-    concrete_timer_handler = (cl_timer_t *)malloc(sizeof(cl_timer_t));
-    if (!concrete_timer_handler) {
-        err = 200;
-        printf("Failed to malloc timer structure\n");
-        goto bail;
-    }
-
-    /* Init timer */
-    cl_err = cl_timer_init(concrete_timer_handler, concrete_timer_cb, data);
-    if (cl_err != CL_SUCCESS) {
-        err = 201;
-        printf("Failed to init timer\n");
-        goto bail;
-    }
-
-    cl_err = cl_timer_start(concrete_timer_handler, timeout);
-    if (cl_err != CL_SUCCESS) {
-        err = 202;
-        printf("Failed to start timer, err = %u\n", cl_err);
-    }
-
-bail:
-    *timer_handler = concrete_timer_handler;
-#endif
-	return err;
+	return 0;
 }
 
 static void
@@ -111,7 +69,7 @@ int main(void)
 		return err;
 	}
 #ifndef WIN32
-	complib_init();
+//	complib_init();
 #endif
 
     err = lag_fsm_init(pFsm, FsmTrace, ConcreteTmSched, ConcreteTmUnsched);
@@ -141,11 +99,7 @@ int main(void)
 	
 	fsm_print(&pFsm->base);
 	printf("\n");
-#ifndef WIN32
-	sleep(4);
-#endif
 	printf("********** FSM test finish ************\n");
 
-	getchar();
 	return err;
 }
