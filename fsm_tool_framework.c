@@ -35,30 +35,33 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <termios.h>
-//#include "logging.h"
 #endif
 #include "fsm_tool_framework.h"
 
-void fsm_state_base_entry(fsm_base *fsm, fsm_state_base *target_state);
-void fsm_state_base_exit(fsm_base *fsm, fsm_state_base *state);
-void fsm_state_simple_entry(fsm_base *fsm, fsm_state_base *target_state);
-void fsm_state_simple_exit(fsm_base *fsm, fsm_state_base *target_state);
-void fsm_state_composed_entry(fsm_base *fsm, fsm_state_base *target_state);
-void fsm_state_composed_exit(fsm_base *fsm, fsm_state_base *target_state);
-int fsm_schedule_timeout(fsm_base *fsm, fsm_timer_index timer_index,
-                         int timeout, unsigned short id);
-int fsm_unschedule_timeout(fsm_base *fsm, fsm_timer_index timer_index);
-void print_fsm(fsm_base *fsm);
-int fsm_tm_sched(fsm_base *fsm, int timeout, fsm_timer_index timer_index,
-                 unsigned short id);
-int fsm_tm_unsched(fsm_base *fsm, unsigned short id);
-int fsm_tm_init(timer_mngr *timer_manager);
-int fsm_tm_deinit(timer_mngr *timer_manager);
+int fsm_state_base_entry     (struct fsm_base *fsm,  struct fsm_state_base *target_state, struct fsm_event_base * ev);
+int fsm_state_base_exit      (struct fsm_base *fsm,  struct fsm_state_base *state,        struct fsm_event_base * ev);
+int fsm_state_simple_entry   (struct fsm_base *fsm, struct fsm_state_base *current_state,  struct fsm_state_base *target_state, struct fsm_event_base * ev);
+int fsm_state_simple_exit    (struct fsm_base *fsm, struct fsm_state_base *current_state,  struct fsm_state_base *target_state, struct fsm_event_base * ev);
+int fsm_state_composed_entry (struct fsm_base *fsm, struct fsm_state_base *current_state,  struct fsm_state_base *target_state, struct fsm_event_base * ev);
+int fsm_state_composed_exit  (struct fsm_base *fsm, struct fsm_state_base *current_state,  struct fsm_state_base *target_state, struct fsm_event_base * ev);
+
+int fsm_schedule_timeout(struct fsm_base *fsm, enum fsm_timer_index timer_index,
+                         int timeout, unsigned char id);
+int fsm_unschedule_timeout(struct fsm_base *fsm, enum fsm_timer_index timer_index);
+
+int fsm_tm_sched(struct fsm_base *fsm, int timeout, enum fsm_timer_index timer_index,
+                 unsigned char id);
+int fsm_tm_unsched(struct fsm_base *fsm, unsigned char id);
+int fsm_tm_init(struct timer_mngr *timer_manager);
+int fsm_tm_deinit(struct timer_mngr *timer_manager, void* unsched);
+int fsm_state_handle_event(struct fsm_base *fsm, struct fsm_state_base *state,
+                           struct fsm_event_base *ev, struct fsm_state_base** target_state);
+struct fsm_state_base * get_state_by_id(struct fsm_base *fsm, unsigned char id);
 
 /*------------------------------------------------------------------------
                        fsm_init
 
-   Purpose:  init of fsm_base
+   Purpose:  init of struct fsm_base
            initialized  attributes , current state assigned to Default state of FSM ,
            passed pointer to real Timer Manager class
    Output :
@@ -67,54 +70,106 @@ int fsm_tm_deinit(timer_mngr *timer_manager);
    Returns:  none
    ------------------------------------------------------------------------*/
 int
-fsm_init(fsm_base *fsm, fsm_state_base *curr_state_entry, uint8 num_states,
-         int *state_timer_values, fsm_user_trace user_trace,
-         void *timer_sched, void *timer_unsched)
+fsm_init(                                 struct fsm_base *fsm, 
+                                          struct fsm_state_base *curr_state_entry, 
+                                          uint8 num_states,
+                                          int *state_timer_values, fsm_user_trace user_trace,
+                                          void *timer_sched, void *timer_unsched, 
+                                          struct fsm_static_data * static_data)
 {
-    int rc = 1;
+    int rc = 0;
 
-    /* itsTraceMode   = FALSE; */
     fsm->busy_flag = 0;
-    fsm->current_event = NULL;
-    fsm->curr_state = curr_state_entry;
-    fsm->prev_state = fsm->last_simple_state = fsm->curr_state;
-    fsm->state_timers = state_timer_values;
-    fsm->num_states = num_states;
-    fsm->user_trace = user_trace;
-    fsm->tmr_mngr.sched_func = timer_sched;
-    fsm->tmr_mngr.unsched_func = timer_unsched;
-    fsm_tm_init(&fsm->tmr_mngr);
-    fsm_trace(fsm, "\nFsm Framework called %s \n", __FUNCTION__);
-    fsm_trace(fsm, "FSM passed to %s state\n\n", fsm->curr_state->name);
+    fsm->curr_state = curr_state_entry->id;
+	fsm->prev_state = fsm->curr_state ;
+	
+	static_data->num_states = num_states;
+	static_data->tm_sched_func = timer_sched;
+	static_data->tm_unsched_func = timer_unsched;
+	static_data->user_trace = user_trace;
+	//static_data->timer_used = (static_data->tm_sched_func !=NULL);
+	if(static_data->timer_used) {
+		struct fsm_tm_base * tm = (struct fsm_tm_base *)&fsm[1];
+		tm->state_timers = state_timer_values;
+        fsm_tm_init(&tm->tmr_mngr);
+	}
+	fsm->gen_data = static_data;
+
+    fsm_trace(fsm, "Fsm Framework called %s\n", __FUNCTION__);
+    fsm_trace(fsm, "FSM passed to %s state\n", curr_state_entry->name);
     return rc;
 }
 
 int
-fsm_deinit(fsm_base *fsm)
+fsm_deinit(struct fsm_base *fsm)
 {
-    fsm->state_timers = NULL;
-    fsm->num_states = 0;
-    fsm->user_trace = NULL;
-    fsm_tm_deinit(&fsm->tmr_mngr);
+   
+	fsm_trace(fsm, "\nFsm Framework: called %s \n", __FUNCTION__);
+	if(fsm->curr_state)
+	{
+	   fsm->gen_data->num_states = 0;
+	   fsm->gen_data->user_trace = NULL;
+	   fsm->gen_data->tm_sched_func = NULL;
+	   fsm->gen_data->tm_unsched_func = NULL;
+	}
+	if(fsm->gen_data->timer_used)
+	{
+		struct fsm_tm_base * tm = (struct fsm_tm_base *)&fsm[1];
+		tm->state_timers = NULL;
+		fsm_tm_deinit(&tm->tmr_mngr, fsm->gen_data->tm_unsched_func);
+		fsm->gen_data->tm_unsched_func = NULL;
+		fsm->gen_data->tm_sched_func = NULL;
+	}
     return 0;
 }
 
 void
-fsm_set_timer_value(fsm_base *fsm, int state, int value)
+fsm_set_timer_value(struct fsm_base *fsm, int state, int value)
 {
     /* to add validation that condition state cannot have timeouts !!  and state without timers transition also cannot accept timer value !=0 TODO (generate bit additional in state) */
-    if (state < fsm->num_states) {
-        fsm->state_timers[state] = value;
+	if (state < fsm->gen_data->num_states) {
+		struct fsm_tm_base * tm = (struct fsm_tm_base *)&fsm[1];
+        tm->state_timers[state] = value;
     }
 }
 
 int
-fsm_get_timer_value(fsm_base *fsm, int state)
+fsm_get_timer_value(struct fsm_base *fsm, int state)
 {
-    if (state < fsm->num_states) {
-        return fsm->state_timers[state];
+    if (state < fsm->gen_data->num_states) {
+		struct fsm_tm_base * tm = (struct fsm_tm_base *)&fsm[1];
+         return tm->state_timers[state];
     }
     return 0;
+}
+
+
+tbool
+fsm_is_in_state (struct fsm_base *fsm, unsigned short state)
+{
+  tbool res = 0;
+  if(fsm && (state <fsm->gen_data->num_states))
+  {
+	  if (fsm->gen_data->states[state]->default_substate != NULL){ /* state - composed !*/
+		  res = (fsm->gen_data->states[fsm->curr_state]->composed->id == state);
+	  }
+	  else{
+	     res = (state == fsm->curr_state);
+	  }
+  }
+  return res;
+}
+
+const char * 
+fsm_get_state(struct fsm_base *fsm, unsigned short *state)
+{
+   if (fsm) {
+	   *state = fsm->curr_state;
+	   return (fsm->gen_data->states[fsm->curr_state]->name);
+   }
+   else {
+	   return NULL;
+   }
 }
 
 /*----------------------------------------------------------------------
@@ -126,24 +181,24 @@ fsm_get_timer_value(fsm_base *fsm, int state)
 
    Returns:  none
    ----------------------------------------------------------------------*/
-void
-fsm_timer_trigger_operation(fsm_base *fsm, unsigned short id)
+int
+fsm_timer_trigger_operation(struct timer_params *timer_data)
 {
-    fsm_timer_event ev;
+    struct fsm_timer_event ev;
 
-    if (id == AUX_TIMEOUT_ID) {
+    if (timer_data->fsm_timer_id == AUX_TIMEOUT_ID) {
         ev.opcode = AUX_TIMER_EVENT;
         ev.name = "AUX_TIMER_EVENT";
     }else {
         ev.opcode = TIMER_EVENT;
         ev.name = "TIMER_EVENT";
     }
-    ev.id = id; /* id of timer = the name of the state  where timer  was scheduled */
-    fsm_handle_event(fsm, (fsm_event_base*) &ev);
+    ev.id = timer_data->fsm_timer_id; /* id of timer = the name of the state  where timer  was scheduled */
+    return fsm_handle_event(timer_data->fsm, (struct fsm_event_base*) &ev);
 }
 
 /*----------------------------------------------------------------------
-                       print_fsm
+                       fsm_print
    Purpose: debug print of FSM
           prints current event,current state of FSM, and previous event and State
           called user_trace function that specifies generic trace with other FSM attributes
@@ -153,16 +208,17 @@ fsm_timer_trigger_operation(fsm_base *fsm, unsigned short id)
    Returns:  none
    ----------------------------------------------------------------------*/
 void
-print_fsm(fsm_base* fsm)
+fsm_print(struct fsm_base* fsm)
 {
     int len = 0;
     char tracer_buffer[300];
 
     len += sprintf(tracer_buffer,
-                   "Curr. state = %s, Prev. state = %s",
-                   fsm->curr_state->name, fsm->prev_state->name);
-    if (fsm->user_trace) {
-        fsm->user_trace(tracer_buffer, len);
+                   "Curr. state = %s, Prev. state = %s\n",
+				   fsm->gen_data->states[fsm->curr_state]->name,
+				   fsm->gen_data->states[fsm->prev_state]->name);
+	if (fsm->gen_data->user_trace) {
+        fsm->gen_data->user_trace(tracer_buffer, len);
     }
 }
 
@@ -178,7 +234,7 @@ print_fsm(fsm_base* fsm)
    Returns:  none
    ----------------------------------------------------------------------*/
 void
-fsm_trace(fsm_base *fsm, const char *fmt, ...)
+fsm_trace(struct fsm_base *fsm, const char *fmt, ...)
 {
     int len;
     va_list ap;
@@ -186,10 +242,30 @@ fsm_trace(fsm_base *fsm, const char *fmt, ...)
 
     va_start(ap, fmt);
     len = vsprintf(tracer_buffer, fmt, ap);
-    if (fsm->user_trace) {
-        fsm->user_trace(tracer_buffer, len);
+    if (fsm->gen_data->user_trace) {
+        fsm->gen_data->user_trace(tracer_buffer, len);
     }
     va_end(ap);
+}
+
+
+/*----------------------------------------------------------------------
+                       get_state_by_state_id
+   Purpose:   get state  structure by state ID 
+
+   Input  : 
+   Output :
+   Precondition:
+
+   Returns:  none
+   ----------------------------------------------------------------------*/
+struct fsm_state_base * 
+get_state_by_id(struct fsm_base *fsm, unsigned char id)
+{
+    if(!fsm) {
+	    return NULL;
+    }
+    return fsm->gen_data->states[id];
 }
 
 /*----------------------------------------------------------------------
@@ -208,29 +284,31 @@ fsm_trace(fsm_base *fsm, const char *fmt, ...)
 
    Returns:  none
    ----------------------------------------------------------------------*/
-fsm_consume_results
-fsm_handle_event(fsm_base *fsm, fsm_event_base *ev)
+int
+fsm_handle_event(struct fsm_base *fsm, struct fsm_event_base *ev)
 {
-	fsm_state_base      *target_state = NULL;
-	fsm_consume_results  consume_event_result;
+	int err = FSM_CONSUMED;
+	struct fsm_state_base *target_state = NULL;
+	struct fsm_state_base *curr_state_p = get_state_by_id(fsm, fsm->curr_state);
+
     if (!ev) {
         return FSM_CONSUME_ERROR;
     }
+
     fsm_trace(fsm, "Event %s arrived to state %s (%d)\n", ev->name,
-              fsm->curr_state->name, fsm->curr_state->id);
+              curr_state_p->name, curr_state_p->id);
 
     if (ev->opcode == TIMER_EVENT) {
-        fsm_trace(fsm, "  timer_id = %d ", (( fsm_timer_event*)ev)->id);
+        fsm_trace(fsm, "  timer_id = %d\n", (( struct fsm_timer_event*)ev)->id);
     }
+
     if (fsm->busy_flag) {
-        fsm_trace(fsm,
-                  "FSM Framework Error: try to recursive entry in \n");
+        fsm_trace(fsm, "FSM Framework Error: try to recursive entry in \n");
         return FSM_CONSUME_ERROR;
     }
 
-    fsm->current_event = ev;
+    /* fsm->current_event = ev; */
     fsm->busy_flag = 1;
-    consume_event_result = FSM_CONSUMED;
 
     if (ev->opcode == AUX_TIMER_EVENT) {
         fsm_unschedule_aux_timer(fsm);
@@ -238,44 +316,42 @@ fsm_handle_event(fsm_base *fsm, fsm_event_base *ev)
 
     do {
         fsm->reaction_in_state = 0;
-        if ((target_state =
-                 fsm_state_handle_event(fsm, fsm->curr_state, ev)) != NULL) {
-            if (consume_event_result == FSM_CONSUME_ERROR) {
-                break; /* returns with consume error */
-            }
 
-            if (target_state->type == SIMPLE) {
-                fsm->last_simple_state = target_state;
-            }
-            fsm->prev_state = fsm->curr_state;
-            fsm->curr_state = target_state;
-        }else {
-            if (fsm->curr_state->type == CONDITION) {
-                fsm_trace(fsm,
-                          "FSM_framework: Error :event %s is not consumed in condition state %s\n",
-                          fsm->current_event->name, fsm->curr_state->name);
-                consume_event_result = FSM_CONSUME_ERROR;
-            }else {
-                consume_event_result = FSM_NOT_CONSUMED;
+        err = fsm_state_handle_event(fsm, curr_state_p, ev, &target_state);
+        if (err > FSM_LAST_FRAMEWORK_ERROR) {
+        	// user returned error from fsm reaction
+        	goto bail;
+        }
+
+        if (target_state != NULL) {
+			fsm->prev_state = curr_state_p->id;
+			curr_state_p    = target_state;
+        }
+        else {
+            if (curr_state_p->type == CONDITION) {
+                fsm_trace(fsm, "FSM Framework Error: event %s is not consumed in condition state %s\n",
+                          ev->name, curr_state_p->name);
+                err = FSM_CONSUME_ERROR;
             }
             fsm_trace(fsm, "Event %s is not consumed in state %s (%d)\n\n",
-                      ev->name, fsm->curr_state->name, fsm->curr_state->id);
+                      ev->name, curr_state_p->name, curr_state_p->id);
+            err = 0; /* no error on event is not consumed, only log print */
             break;
         }
-        if (target_state->type == CONDITION) { /* m_pCurrentEvent = &Null_ev ; // need to preserve this event for pass its parameters to reactions */
-            fsm_trace(fsm, "Check Condition %s state\n",
-                      fsm->curr_state->name);
+        if (target_state->type == CONDITION) { /* m_pCurrentEvent = &Null_ev ; need to preserve this event for pass its parameters to reactions */
+            fsm_trace(fsm, "Check Condition %s state\n", curr_state_p->name);
+			fsm->curr_state = target_state->id;
         }
-    } while ((target_state->type == CONDITION) &&
-             (consume_event_result == FSM_CONSUMED));
+    } while ((target_state->type == CONDITION) && (err == FSM_CONSUMED));
 
     if (target_state) {
-        fsm_trace(fsm, "FSM passed to %s state\n\n", fsm->curr_state->name);
+        fsm_trace(fsm, "FSM passed to %s state\n\n", target_state->name);
+		fsm->curr_state = target_state->id;
     }
-    fsm->busy_flag = 0;
-    fsm->current_event = NULL;
 
-    return consume_event_result;
+bail:
+    fsm->busy_flag = 0;
+    return err;
 }
 
 /*----------------------------------------------------------------------
@@ -288,16 +364,22 @@ fsm_handle_event(fsm_base *fsm, fsm_event_base *ev)
    Returns:  none
    ----------------------------------------------------------------------*/
 int
-fsm_schedule_aux_timer(fsm_base *fsm, int timeout)
+fsm_schedule_aux_timer(struct fsm_base *fsm, int timeout)
 {
-    int rc = 1;
+    int err = 0;
 
-    rc = fsm_tm_sched(fsm, timeout, AUX_TIMEOUT_ID, 0);
-    if (rc == 0) {
-        fsm_trace(fsm, "Auxiliary timer %d was not scheduled in state %s ",
-                  timeout, fsm->curr_state->name);
+	if (!fsm->gen_data->timer_used) {
+        fsm_trace(fsm, "Auxiliary timer was not scheduled in state %d because timer is not used in this FSM",
+                  fsm->curr_state);
+				err = FSM_TIMER_USING_ERROR;
+		 return err;
+	 }
+    err = fsm_tm_sched(fsm, timeout, AUX_TIMEOUT_ID, 0);
+    if (err != 0) {
+        fsm_trace(fsm, "Auxiliary timer %d was not scheduled in state %d",
+                  timeout, fsm->curr_state);
     }
-    return rc;
+    return err;
 }
 /*----------------------------------------------------------------------
                        fsm_unschedule_aux_timer
@@ -309,16 +391,23 @@ fsm_schedule_aux_timer(fsm_base *fsm, int timeout)
    Returns:  none
    ----------------------------------------------------------------------*/
 int
-fsm_unschedule_aux_timer(fsm_base* fsm)
+fsm_unschedule_aux_timer(struct fsm_base* fsm)
 {
-    int rc = 1;
+    int err = 0;
+	
+	  if (!fsm->gen_data->timer_used) {
+        fsm_trace(fsm, "Auxiliary timer was not unscheduled in state %d because timer is not used in this FSM",
+                  fsm->curr_state );
+				err = FSM_TIMER_USING_ERROR;
+		    return err;
+	  }
 
-    rc = fsm_tm_unsched(fsm, AUX_TIMEOUT_ID);
-    if (rc == 0) {
-        fsm_trace(fsm, "Auxiliary timer was not unscheduled in state %s ",
-                  fsm->curr_state->name);
+    err = fsm_tm_unsched(fsm, (unsigned char)AUX_TIMEOUT_ID);
+    if (err != 0) {
+        fsm_trace(fsm, "Auxiliary timer was not unscheduled in state %d",
+                  fsm->curr_state );
     }
-    return rc;
+    return err;
 }
 
 /****************************************************************************
@@ -334,41 +423,57 @@ fsm_unschedule_aux_timer(fsm_base* fsm)
 
    Returns:  target state
    ----------------------------------------------------------------------*/
-fsm_state_base *
-fsm_state_handle_event(fsm_base *fsm, fsm_state_base *state,
-                       fsm_event_base *ev)
+int
+fsm_state_handle_event(struct fsm_base *fsm, struct fsm_state_base *state,
+                       struct fsm_event_base *ev, struct fsm_state_base **target_state)
 {
-    fsm_state_base *target_state = NULL;
+	int err = 0;
+	struct fsm_state_base *tmp_target_state = NULL;
 
-    target_state =
-        ((fsm_state_dispatch)(state->state_dispatcher))(fsm, state->id);
-    if (target_state == NULL) {
+    err = ((fsm_state_dispatch)(state->state_dispatcher))(fsm, state->id, ev, &tmp_target_state);
+    if (err > FSM_LAST_FRAMEWORK_ERROR) {
+    	// user returned error from fsm reaction
+    	goto bail;
+    }
+
+    if (tmp_target_state == NULL) {
         if (state->composed) {
-            target_state =
-                ((fsm_state_dispatch)(state->composed->state_dispatcher))(fsm,
-                                                                          state
-                                                                          ->
-                                                                          composed
-            ->id);
+        	err = ((fsm_state_dispatch)(state->composed->state_dispatcher))(fsm, state->composed->id, ev, &tmp_target_state);
+            if (err > FSM_LAST_FRAMEWORK_ERROR) {
+            	// user returned error from fsm reaction
+            	goto bail;
+            }
         }
     }
-    if (target_state && (target_state->type != CONDITION)) {
-        //fsm->consumed_in_composed = (target_state->default_substate) ? 1 : 0;
+
+    if (tmp_target_state) {
 
         /* if arc on composed state(CurrentState == targetState ) and also "reaction in state" - nothing to do .
          * By this we will support arcs on composed states */
-        if ((fsm->curr_state) && (state->composed) &&
-            (state->composed == target_state) && (fsm->reaction_in_state)) {
-            target_state = fsm->curr_state;
-        }else {
-            if (target_state->default_substate) {
-                target_state = target_state->default_substate;
+        if ( (state->composed) &&
+             (state->composed == tmp_target_state) && (fsm->reaction_in_state)) {
+        	tmp_target_state = fsm->gen_data->states[fsm->curr_state];
+        }
+		else {
+            if (tmp_target_state->default_substate) {
+            	tmp_target_state = tmp_target_state->default_substate;
             }
-            fsm_state_simple_exit(fsm, target_state);
-            fsm_state_simple_entry(fsm, target_state);
+            if (!fsm->reaction_in_state) {
+            	err = fsm_state_simple_exit(fsm, state, tmp_target_state, ev);
+	            if (err > FSM_LAST_FRAMEWORK_ERROR) {
+         		    goto bail;
+				}
+            	err = fsm_state_simple_entry(fsm, state, tmp_target_state, ev);
+ 	            if (err > FSM_LAST_FRAMEWORK_ERROR) {
+         		    goto bail;
+				}
+           }
         }
     }
-    return target_state;
+
+bail:
+    *target_state = tmp_target_state;
+    return err;
 }
 
 /*----------------------------------------------------------------------
@@ -380,21 +485,29 @@ fsm_state_handle_event(fsm_base *fsm, fsm_state_base *state,
    Returns:  status
    ----------------------------------------------------------------------*/
 int
-fsm_schedule_timeout(fsm_base *fsm, fsm_timer_index timer_index, int timeout,
-                     unsigned short id)
+fsm_schedule_timeout(struct fsm_base *fsm, enum fsm_timer_index timer_index,
+		                 int timeout, unsigned char id)
 {
-    int rc = 1;
+    int err = 0;
 
-    if (fsm->reaction_in_state || (timeout == 0)) {
-        return 0;
+		if (fsm->reaction_in_state ||
+    	  (timeout == 0)) {
+        return err;
     }
-    fsm_trace(fsm, "fsm_tm_sched in state for %d msec\n", timeout);
 
-    rc = fsm_tm_sched(fsm, timeout, timer_index, id);
-    if (rc == 0) {
-        fsm_trace(fsm, " Timer %d was not scheduled \n", timer_index);
+		if(!fsm->gen_data->timer_used) {
+	      fsm_trace(fsm, "fsm_tm_sched: timer not used\n");
+				err = FSM_TIMER_USING_ERROR;
+		    return err;
+	  }
+
+    fsm_trace(fsm, "fsm_schedule_timeout in state for %d msec\n", timeout);
+
+    err = fsm_tm_sched(fsm, timeout, timer_index, id);
+    if (err != 0) {
+        fsm_trace(fsm, " Timer %d was not scheduled\n", timer_index);
     }
-    return rc;
+    return err;
 }
 
 /*--------------------------------------------------------------
@@ -408,33 +521,33 @@ fsm_schedule_timeout(fsm_base *fsm, fsm_timer_index timer_index, int timeout,
    ----------------------------------------------------------------------*/
 
 int
-fsm_unschedule_timeout(fsm_base * fsm, fsm_timer_index timer_index)
+fsm_unschedule_timeout(struct fsm_base *fsm, enum fsm_timer_index timer_index)
 {
-    int rc = 1;
-    unsigned short id;
+    int err = 0;
+    unsigned char id;
     const char *name;
-
-    id =
-        (timer_index ==
-         SIMPLE_STATE_TMR) ? (fsm->curr_state->id) : fsm->curr_state->composed
-        ->id;
-    name =
-        (timer_index ==
-         SIMPLE_STATE_TMR) ? (fsm->curr_state->name) : fsm->curr_state->
-        composed->
-        name;
-
-    if (fsm->reaction_in_state || (fsm->state_timers[id] == 0)) {
-        return 0;
+	struct fsm_state_base *curr_state_p = get_state_by_id(fsm, fsm->curr_state);
+    struct fsm_tm_base * tm = (struct fsm_tm_base *)&fsm[1];
+		
+	  if (!fsm->gen_data->timer_used) {
+	      return err;
+	  }
+      
+	  id   = (timer_index == SIMPLE_STATE_TMR) ? (curr_state_p->id)   : curr_state_p->composed->id;
+      name = (timer_index == SIMPLE_STATE_TMR) ? (curr_state_p->name) : curr_state_p->composed->name;
+	  
+	  if (fsm->reaction_in_state ||
+		    (tm->state_timers[id] == 0)) {
+        return err;
     }
-    fsm_trace(fsm, "UnsnchedlTm in state %s for %d msec \n", name,
-              fsm->state_timers[id]);
 
-    rc = fsm_tm_unsched(fsm, id);
-    if (rc == 0) {
-        fsm_trace(fsm, "Timer was not unscheduled in state %s \n", name);
+    fsm_trace(fsm, "fsm_unschedule_timeout in state %s for %d msec\n", name, tm->state_timers[id]);
+
+    err = fsm_tm_unsched(fsm, id);
+    if (err != 0) {
+        fsm_trace(fsm, "Timer was not unscheduled in state %s\n", name);
     }
-    return rc;
+    return err;
 }
 
 /*--------------------------------------------------------------
@@ -443,24 +556,40 @@ fsm_unschedule_timeout(fsm_base * fsm, fsm_timer_index timer_index)
          Entry function called upon entry each  state
          possible actions - scheduler timer , call entryState function
    Input  :  fsm -  pointer to user's FSM
-   Output :
+   Output :  error
    Precondition:
 
    Returns:  none
    ----------------------------------------------------------------------*/
-void
-fsm_state_base_entry(fsm_base *fsm, fsm_state_base *state)
+int
+fsm_state_base_entry(struct fsm_base *fsm, struct fsm_state_base *state, struct fsm_event_base *ev)
 {
-    if (state->type == COMPOSED) {
-        fsm_schedule_timeout(fsm, COMPOSED_STATE_TMR,
-                             fsm->state_timers[state->id], state->id);
-    }else {
-        fsm_schedule_timeout(fsm, SIMPLE_STATE_TMR,
-                             fsm->state_timers[state->id], state->id);
+    int err = 0;
+	
+	if (fsm->gen_data->timer_used) {
+	   struct fsm_tm_base * tm = (struct fsm_tm_base *)&fsm[1];
+		
+	   if (state->type == COMPOSED) {
+          err = fsm_schedule_timeout(fsm, COMPOSED_STATE_TMR,
+                                   tm->state_timers[state->id], state->id);
+          if (err != 0) {
+        	 goto bail;
+          }
+        }
+	    else {
+           err = fsm_schedule_timeout(fsm, SIMPLE_STATE_TMR,
+                                   tm->state_timers[state->id], state->id);
+           if (err != 0) {
+        	  goto bail;
+           }
+      }
+	}
+	if (state->entry_func) {
+        err = ((fsm_state_entry)(state->entry_func))(fsm, ev);
     }
-    if (state->entry_func) {
-        ((fsm_state_entry)(state->entry_func))(fsm);
-    }
+
+bail:
+    return err;
 }
 
 /*--------------------------------------------------------------
@@ -470,22 +599,35 @@ fsm_state_base_entry(fsm_base *fsm, fsm_state_base *state)
           possible actions - unscheduler timer , call exitState function
 
    Input  : fsm -  pointer to user's FSM
-   Output :
+   Output : error
    Precondition:
 
    Returns:  none
    ----------------------------------------------------------------------*/
-void
-fsm_state_base_exit(fsm_base *fsm, fsm_state_base *state)
+int
+fsm_state_base_exit(struct fsm_base *fsm, struct fsm_state_base *state, struct fsm_event_base *ev)
 {
-    if (state->type == COMPOSED) {
-        fsm_unschedule_timeout(fsm, COMPOSED_STATE_TMR);
-    }else {
-        fsm_unschedule_timeout(fsm, SIMPLE_STATE_TMR);
-    }
+    int err = 0;
+
+	if (fsm->gen_data->timer_used) {
+        if (state->type == COMPOSED) {
+           err = fsm_unschedule_timeout(fsm, COMPOSED_STATE_TMR);
+           if (err != 0) {
+        	  goto bail;
+          }
+        }else {
+            err = fsm_unschedule_timeout(fsm, SIMPLE_STATE_TMR);
+            if (err != 0) {
+        	   goto bail;
+         }
+       }
+	}
     if (state->exit_func) {
-        ((fsm_state_exit)(state->exit_func))(fsm);
+        err = ((fsm_state_exit)(state->exit_func))(fsm, ev);
     }
+
+bail:
+    return err;
 }
 
 /*---------------------------------------------------
@@ -497,13 +639,23 @@ fsm_state_base_exit(fsm_base *fsm, fsm_state_base *state)
    redefinition of base behavior: first call Base Entry function  and
    then - call Entry function of Parent Composed state(if parent defined for this state)
    --------------------------------------------------------------------*/
-void
-fsm_state_simple_entry(fsm_base *fsm, fsm_state_base *target_state)
+int
+fsm_state_simple_entry(struct fsm_base *fsm, struct fsm_state_base *current_state,
+		               struct fsm_state_base *target_state, struct fsm_event_base *ev)
 {
-    fsm_state_base_entry(fsm, target_state);
-    if (target_state->composed) {
-        fsm_state_composed_entry(fsm, target_state->composed);
+    int err = 0;
+
+    err = fsm_state_base_entry(fsm,  target_state, ev);
+    if (err != 0) {
+    	goto bail;
     }
+
+    if (target_state->composed) {
+        err = fsm_state_composed_entry(fsm, current_state , target_state->composed, ev);
+    }
+
+bail:
+	return err;
 }
 
 /*--------------------------------------------------------------------
@@ -511,31 +663,46 @@ fsm_state_simple_entry(fsm_base *fsm, fsm_state_base *target_state)
    redefinition of base behavior: first call Base Exit function  and
    then - call Exit function of Parent Composed state(if parent defined for this state)itsReactionInState
    --------------------------------------------------------------------*/
-void
-fsm_state_simple_exit(fsm_base *fsm, fsm_state_base *target_state)
+int
+fsm_state_simple_exit(struct fsm_base *fsm, struct fsm_state_base *current_state,
+		              struct fsm_state_base *target_state, struct fsm_event_base *ev)
 {
-    fsm_state_base_exit(fsm, fsm->curr_state);
-    if (fsm->curr_state->composed) {
-        fsm_state_composed_exit(fsm, target_state);
+    int err = 0;
+
+    err = fsm_state_base_exit(fsm, current_state, ev);
+    if (err != 0) {
+    	goto bail;
     }
+
+    if (current_state->composed) {
+        err = fsm_state_composed_exit(fsm, current_state, target_state, ev);
+    }
+
+bail:
+ 	return err;
 }
 
-/*--------------------------------------------------
-   State Composed functions
-   ----------------------------------------------------*/
+/*-------------------------------------------------
+ *  State Composed functions
+ *-------------------------------------------------*/
 
 /*--------------------------------------------------------------------
            fsm_state_composed_entry
    if Composed state was changed as a result of event consumption
    then call Entry from the Base class
    --------------------------------------------------------------------*/
-void
-fsm_state_composed_entry(fsm_base *fsm, fsm_state_base *target_state)
+int
+fsm_state_composed_entry(struct fsm_base *fsm, struct fsm_state_base *current_state,
+		                 struct fsm_state_base *target_state, struct fsm_event_base *ev)
 {
-    if (!(fsm->last_simple_state->composed) ||
-        (fsm->last_simple_state->composed != target_state)) {
-        fsm_state_base_entry(fsm, target_state);
+    int err = 0;
+
+	if (!(current_state->composed) ||
+		 (current_state->composed != target_state)) {
+
+		err = fsm_state_base_entry(fsm, target_state, ev);
     }
+ 	return err;
 }
 
 /*--------------------------------------------------------------------
@@ -544,27 +711,31 @@ fsm_state_composed_entry(fsm_base *fsm, fsm_state_base *target_state)
    from the Base class
 
    --------------------------------------------------------------------*/
-void
-fsm_state_composed_exit(fsm_base *fsm, fsm_state_base *target_state)
+int
+fsm_state_composed_exit(struct fsm_base *fsm, struct fsm_state_base *current_state,
+		                struct fsm_state_base *target_state, struct fsm_event_base *ev)
 {
-    if (target_state->type != CONDITION) {
-        if (!(target_state->composed) ||
-            (target_state->composed != fsm->curr_state->composed) /* use LastSimpleState */
-            /* ((target_state->itsComposed == fsm->itsCurrStateP)&&(fsm->itsLastConsumed == fsm->itsCurrStateP->itsComposed )) New condition ! to validate arc on composed */
-            ) {
-            fsm_state_base_exit(fsm, fsm->curr_state->composed);
-        }
+    int err = 0;
+
+    if (!(target_state->composed) ||
+        (target_state->composed != current_state->composed) /* use LastSimpleState */
+        /* ((target_state->itsComposed == fsm->itsCurrStateP)&&(fsm->itsLastConsumed == fsm->itsCurrStateP->itsComposed )) New condition ! to validate arc on composed */
+       ) {
+        err = fsm_state_base_exit(fsm, current_state->composed, ev);
     }
+   	return err;
 }
 
 /******************************************Timer functions**************************************************************/
 
 int
-fsm_tm_sched(fsm_base *fsm, int timeout, fsm_timer_index timer_index,
-             unsigned short id)
+fsm_tm_sched(struct fsm_base *fsm, int timeout, enum fsm_timer_index timer_index,
+             unsigned char id)
 {
-    timer_mngr *tmr = (timer_mngr*) &(fsm->tmr_mngr);
-    int rc = 0;
+    int err = 0;
+	struct fsm_tm_base * tm = (struct fsm_tm_base *)&fsm[1];
+    struct timer_mngr *tmr = (struct timer_mngr*) &(tm->tmr_mngr);
+	void *sched = fsm->gen_data->tm_sched_func;
 
     if (timer_index < LAST_INDEX_TMR) {
         tmr->client_data[timer_index].fsm_timer_id = id;
@@ -572,45 +743,43 @@ fsm_tm_sched(fsm_base *fsm, int timeout, fsm_timer_index timer_index,
         tmr->client_data[timer_index].fsm = fsm;
 
         /*return lew_event_reg_timer(tmr->tmr_context, &tmr->itsClientData[theTimerIndex].itsTimerRef, tmr->tmrMngr.itsCallback ,  (void *)&tmr->itsClientData[theTimerIndex], theTimeout); */
-        if (tmr->sched_func) {
-            rc =
-                ((real_tm_sched)tmr->sched_func)(timeout,
-                                                 (void *)&tmr->client_data[
-                                                     timer_index],
-                                                 &tmr->client_data[timer_index]
-                                                 .timer_ref);
+        if (sched) {
+            err = ((real_tm_sched)sched)(timeout,
+                                         (void *)&tmr->client_data[timer_index],
+                                         &tmr->client_data[timer_index].timer_ref);
         }
     }
-    return rc;
+    return err;
 }
+
 /* ----------------------------------------------------------------------------------- */
 int
-fsm_tm_unsched(fsm_base *fsm, unsigned short id)
+fsm_tm_unsched(struct fsm_base *fsm, unsigned char id)
 {
+    int err = 0;
     int i;
-    int rc = 0;
-    timer_mngr *tmr = (timer_mngr*) &(fsm->tmr_mngr);
+	struct fsm_tm_base * tm = (struct fsm_tm_base *)&fsm[1];
+    struct timer_mngr *tmr = (struct timer_mngr*) &(tm->tmr_mngr);
+	void *unsched = fsm->gen_data->tm_unsched_func;
 
     for (i = SIMPLE_STATE_TMR; i < LAST_INDEX_TMR; i++) {
         if (tmr->client_data[i].fsm_timer_id == id) {
-            if (tmr->unsched_func) {
-                rc =
-                    ((real_tm_unsched)tmr->unsched_func)(&tmr->client_data[i].
-                                                         timer_ref);
+            if (unsched) {
+                err = ((real_tm_unsched)unsched )(&tmr->client_data[i].timer_ref);
             }
             tmr->client_data[i].scheduled_status = 0;
             break;
         }
     }
     if (i == LAST_INDEX_TMR) {
-        /* error! */
+        /* error */
     }
-    return rc;
+    return err;
 }
 
 /* ----------------------------------------------------------------------------------- */
 int
-fsm_tm_init(timer_mngr *timer_manager)
+fsm_tm_init(struct timer_mngr *timer_manager)
 {
     int i, rc = 0;
 
@@ -624,15 +793,15 @@ fsm_tm_init(timer_mngr *timer_manager)
 
 /* ----------------------------------------------------------------------------------- */
 int
-fsm_tm_deinit(timer_mngr *timer_manager)
+fsm_tm_deinit(struct timer_mngr *timer_manager , void *unsched)
 {
     int i;
 
     for (i = SIMPLE_STATE_TMR; i < LAST_INDEX_TMR; i++) {
         if (timer_manager->client_data[i].scheduled_status) {
             /*rc = IPC_removeTimerByRef(itsClientData[i].itsTimerRef);//lew_event_cancel(tmr->tmr_context ,&tmr->itsClientData[theTimerIndex].itsTimerRef);*/
-            if (timer_manager->unsched_func) {
-                ((real_tm_unsched)timer_manager->unsched_func)(&timer_manager->
+            if (unsched) {
+                ((real_tm_unsched)unsched)(&timer_manager->
                                                                client_data[i].
                                                                timer_ref);
             }
@@ -641,7 +810,5 @@ fsm_tm_deinit(timer_mngr *timer_manager)
             break;
         }
     }
-    timer_manager->unsched_func = NULL;
-    timer_manager->sched_func = NULL;
     return 0;
 }

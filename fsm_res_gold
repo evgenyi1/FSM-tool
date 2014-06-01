@@ -1,61 +1,77 @@
+********** FSM test start ************
+Lag FSM:
+Fsm Framework called fsm_init
+Lag FSM: FSM passed to idle state
 
-	Fsm Framework called fsm_init
-FSM passed to idle state
-
-Event start_ev arrived to state idle (0)
+Lag FSM: Event start_ev arrived to state idle (0)
 called admin_down_entry_func
-FSM passed to admin_down state
+Lag FSM: FSM passed to admin_down state
 
-Event start_ev arrived to state admin_down (1)
-Event start_ev is not consumed in state admin_down (1)
+Lag FSM: Event start_ev arrived to state admin_down (1)
+Lag FSM: Event start_ev is not consumed in state admin_down (1)
 
-Event admin_on_ev arrived to state admin_down (1)
+Lag FSM: Event admin_on_ev arrived to state admin_down (1)
 called lag_down_entry_func
-fsm_tm_sched in state for 2000 msec
-FSM passed to lag_down state
+Lag FSM: fsm_schedule_timeout in state for 6000 msec
+Lag FSM: FSM passed to lag_down state
 
-Event admin_off_ev arrived to state lag_down (3)
+Lag FSM: Event admin_off_ev arrived to state lag_down (3)
 called lag_down_exit_func
-UnsnchedlTm in state admin_up for 2000 msec
+Lag FSM: fsm_unschedule_timeout in state admin_up for 6000 msec
 called admin_down_entry_func
-FSM passed to admin_down state
+Lag FSM: FSM passed to admin_down state
 
-Event admin_on_ev arrived to state admin_down (1)
+Lag FSM: Event admin_on_ev arrived to state admin_down (1)
 called lag_down_entry_func
-fsm_tm_sched in state for 2000 msec
-FSM passed to lag_down state
+Lag FSM: fsm_schedule_timeout in state for 6000 msec
+Lag FSM: FSM passed to lag_down state
 
-Event lacp_up_ev arrived to state lag_down (3)
+Lag FSM: Event lacp_up_ev arrived to state lag_down (3)
 called lag_down_exit_func
-FSM passed to lag_up state
+Lag FSM: FSM passed to lag_up state
 
-Event port_down_ev arrived to state lag_up (5)
+Lag FSM: Event port_down_ev arrived to state lag_up (5)
 called lag_down_entry_func
-FSM passed to lag_down state
+Lag FSM: FSM passed to lag_down state
 
-Event port_up_ev arrived to state lag_down (3)
+Lag FSM: Event port_up_ev arrived to state lag_down (3)
 called lag_down_exit_func
-fsm_tm_sched in state for 6000 msec
-FSM passed to wait_lag_up state
+Lag FSM: fsm_schedule_timeout in state for 2000 msec
+Lag FSM: FSM passed to wait_lag_up state
 
-Event lacp_up_ev arrived to state wait_lag_up (4)
-UnsnchedlTm in state wait_lag_up for 6000 msec
-FSM passed to lag_up state
+Lag FSM: Event lacp_up_ev arrived to state wait_lag_up (4)
+Lag FSM: fsm_unschedule_timeout in state wait_lag_up for 2000 msec
+Lag FSM: FSM passed to lag_up state
 
-Event mismatch_ev arrived to state lag_up (5)
-Check Condition condit1 state
-FSM passed to lag_up state
+Lag FSM: Event mismatch_ev arrived to state lag_up (5)
+Lag FSM: fsm_unschedule_timeout in state admin_up for 6000 msec
+Lag FSM: Check Condition condit1 state
+Lag FSM: fsm_schedule_timeout in state for 6000 msec
+Lag FSM: FSM passed to lag_up state
 
-Event lacp_down_ev arrived to state lag_up (5)
+Lag FSM: Event lacp_down_ev arrived to state lag_up (5)
 called lag_down_entry_func
-FSM passed to lag_down state
+Lag FSM: FSM passed to lag_down state
 
-Event port_up_ev arrived to state lag_down (3)
+Lag FSM: Event port_up_ev arrived to state lag_down (3)
 called lag_down_exit_func
-fsm_tm_sched in state for 6000 msec
-FSM passed to wait_lag_up state
+Lag FSM: fsm_schedule_timeout in state for 2000 msec
+Lag FSM: FSM passed to wait_lag_up state
 
-Event TIMER_EVENT arrived to state wait_lag_up (4)
-  timer_id = 4 UnsnchedlTm in state wait_lag_up for 6000 msec
+Lag FSM: Event TIMER_EVENT arrived to state wait_lag_up (4)
+Lag FSM:   timer_id = 4
+Lag FSM: fsm_unschedule_timeout in state wait_lag_up for 2000 msec
 called lag_down_entry_func
-FSM passed to lag_down state
+Lag FSM: FSM passed to lag_down state
+
+Lag FSM: Event TIMER_EVENT arrived to state lag_down (3)
+Lag FSM:   timer_id = 2
+called lag_down_exit_func
+Lag FSM: fsm_unschedule_timeout in state admin_up for 6000 msec
+called admin_down_entry_func
+Lag FSM: FSM passed to admin_down state
+
+Lag FSM: Curr. state = admin_down, Prev. state  = lag_down
+
+********** FSM test finish ************
+
